@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aether Weather</title>
+  <link rel="stylesheet" href="style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Exo+2:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+</head>
+<body class="weather-clear">
+
+  <!-- ANIMATED BACKGROUND -->
+  <div class="bg-layer">
+    <canvas id="weatherCanvas"></canvas>
+    <div class="bg-overlay"></div>
+  </div>
+
+  <!-- WEATHER ALERT BANNER -->
+  <div class="alert-banner hidden" id="alertBanner">
+    <i class="fas fa-triangle-exclamation"></i>
+    <span id="alertText"></span>
+    <button class="alert-close" id="alertClose"><i class="fas fa-xmark"></i></button>
+  </div>
+
+  <!-- TOP BAR -->
+  <header class="topbar">
+    <div class="logo">
+      <i class="fas fa-wind logo-icon"></i>
+      <span>Aether</span>
+    </div>
+    <div class="search-wrap">
+      <div class="search-box">
+        <i class="fas fa-search search-icon"></i>
+        <input type="text" id="searchInput" placeholder="Search city..." autocomplete="off" />
+        <button id="locBtn" title="Use my location"><i class="fas fa-location-crosshairs"></i></button>
+        <div class="search-suggestions" id="suggestions"></div>
+      </div>
+    </div>
+    <div class="header-controls">
+      <button class="unit-toggle" id="unitToggle">°C / °F</button>
+      <button class="theme-btn" id="themeBtn"><i class="fas fa-circle-half-stroke"></i></button>
+    </div>
+  </header>
+
+  <!-- PINNED CITY TABS -->
+  <div class="city-tabs-wrap" id="cityTabsWrap">
+    <div class="city-tabs" id="cityTabs"></div>
+    <button class="add-city-btn" id="addCityBtn" title="Pin current city">
+      <i class="fas fa-plus"></i> Pin City
+    </button>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-grid" id="mainContent">
+
+    <!-- HERO -->
+    <section class="card hero-card">
+      <div class="hero-left">
+        <div class="location-line">
+          <i class="fas fa-location-dot"></i>
+          <span id="cityName">--</span>
+          <span id="countryCode"></span>
+        </div>
+        <div class="date-line" id="dateLine">--</div>
+        <div class="big-temp">
+          <span id="mainTemp">--</span>
+          <span class="deg-unit" id="degUnit">°C</span>
+        </div>
+        <div class="weather-desc" id="weatherDesc">--</div>
+        <div class="feels-row">
+          <span>Feels like <b id="feelsLike">--</b></span>
+          <span class="dot-sep">·</span>
+          <span id="highLow">H:-- L:--</span>
+        </div>
+      </div>
+      <div class="hero-right">
+        <div class="weather-icon-wrap">
+          <div class="big-icon" id="bigIcon">🌤️</div>
+          <div class="icon-ring"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- STATS -->
+    <section class="card stats-card">
+      <div class="stat-item clickable" data-stat="humidity">
+        <i class="fas fa-droplet"></i>
+        <span class="stat-label">Humidity</span>
+        <span class="stat-val" id="humidity">--%</span>
+        <div class="stat-bar"><div class="stat-fill" id="humidityBar"></div></div>
+        <span class="stat-hint">tap for info</span>
+      </div>
+      <div class="stat-item clickable" data-stat="wind">
+        <i class="fas fa-wind"></i>
+        <span class="stat-label">Wind</span>
+        <span class="stat-val" id="windSpeed">--</span>
+        <div class="wind-dir-wrap">
+          <div class="wind-compass">
+            <div class="compass-needle" id="compassNeedle"></div>
+          </div>
+          <span class="stat-sub" id="windDir">--</span>
+        </div>
+        <span class="stat-hint">tap for info</span>
+      </div>
+      <div class="stat-item clickable" data-stat="pressure">
+        <i class="fas fa-gauge-high"></i>
+        <span class="stat-label">Pressure</span>
+        <span class="stat-val" id="pressure">-- hPa</span>
+        <div class="pressure-arc-wrap">
+          <svg class="pressure-arc" viewBox="0 0 80 50">
+            <path d="M5,45 A40,40 0 0,1 75,45" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="6" stroke-linecap="round"/>
+            <path d="M5,45 A40,40 0 0,1 75,45" fill="none" stroke="url(#pressGrad)" stroke-width="6" stroke-linecap="round" stroke-dasharray="120" id="pressurePath" stroke-dashoffset="120"/>
+            <defs>
+              <linearGradient id="pressGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#4facfe"/>
+                <stop offset="100%" stop-color="#f093fb"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <span class="stat-hint">tap for info</span>
+      </div>
+      <div class="stat-item clickable" data-stat="visibility">
+        <i class="fas fa-eye"></i>
+        <span class="stat-label">Visibility</span>
+        <span class="stat-val" id="visibility">-- km</span>
+        <span class="stat-hint">tap for info</span>
+      </div>
+      <div class="stat-item clickable" data-stat="uv">
+        <i class="fas fa-sun"></i>
+        <span class="stat-label">UV Index</span>
+        <span class="stat-val" id="uvIndex">--</span>
+        <span class="uv-label" id="uvLabel">--</span>
+        <span class="stat-hint">tap for info</span>
+      </div>
+      <div class="stat-item clickable" data-stat="rain">
+        <i class="fas fa-cloud-rain"></i>
+        <span class="stat-label">Rain Prob.</span>
+        <span class="stat-val" id="rainProb">--%</span>
+        <div class="stat-bar"><div class="stat-fill rain-fill" id="rainBar"></div></div>
+        <span class="stat-hint">tap for info</span>
+      </div>
+    </section>
+
+    <!-- TREND GRAPH -->
+    <section class="card graph-card">
+      <div class="graph-header">
+        <h3 class="card-title"><i class="fas fa-chart-line"></i> Trends</h3>
+        <div class="graph-tabs">
+          <button class="graph-tab active" data-graph="temp">🌡️ Temp</button>
+          <button class="graph-tab" data-graph="humidity">💧 Humidity</button>
+          <button class="graph-tab" data-graph="pressure">📊 Pressure</button>
+          <button class="graph-tab" data-graph="wind">💨 Wind</button>
+        </div>
+      </div>
+      <div class="graph-wrap"><canvas id="trendChart"></canvas></div>
+    </section>
+
+    <!-- SUN TRACKER -->
+    <section class="card sun-card">
+      <h3 class="card-title"><i class="fas fa-sun"></i> Sun Tracker</h3>
+      <div class="sun-arc-wrap">
+        <svg class="sun-arc-svg" viewBox="0 0 300 160" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="sunGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#f6d365"/>
+              <stop offset="100%" stop-color="#fda085"/>
+            </linearGradient>
+            <filter id="sunGlow">
+              <feGaussianBlur stdDeviation="4" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+          <path d="M20,150 Q150,-10 280,150" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="2" stroke-dasharray="5,5"/>
+          <path d="M20,150 Q150,-10 280,150" fill="none" stroke="url(#sunGrad)" stroke-width="3" stroke-linecap="round" stroke-dasharray="450" id="sunPath" stroke-dashoffset="450"/>
+          <circle id="sunBall" cx="20" cy="150" r="12" fill="#fda085" filter="url(#sunGlow)"/>
+        </svg>
+        <div class="sun-times">
+          <div class="sun-time-item">
+            <i class="fas fa-arrow-up sun-rise-icon"></i>
+            <span>Sunrise</span>
+            <b id="sunriseTime">--:--</b>
+          </div>
+          <div class="sun-time-item">
+            <i class="fas fa-arrow-down sun-set-icon"></i>
+            <span>Sunset</span>
+            <b id="sunsetTime">--:--</b>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- HOURLY FORECAST -->
+    <section class="card hourly-card">
+      <h3 class="card-title"><i class="fas fa-clock"></i> 24-Hour Forecast <span class="hint-text">· tap a card</span></h3>
+      <div class="hourly-scroll" id="hourlyScroll"></div>
+      <!-- Inline expand panel -->
+      <div class="hourly-detail-panel hidden" id="hourlyDetailPanel">
+        <div class="hdp-inner" id="hourlyDetailInner"></div>
+      </div>
+    </section>
+
+    <!-- 7-DAY FORECAST -->
+    <section class="card weekly-card">
+      <h3 class="card-title"><i class="fas fa-calendar-week"></i> 7-Day Forecast <span class="hint-text">· tap a day</span></h3>
+      <div class="weekly-list" id="weeklyList"></div>
+      <!-- Inline expand panel -->
+      <div class="day-detail-panel hidden" id="dayDetailPanel">
+        <h4 class="ddp-title" id="ddpTitle"></h4>
+        <div class="hourly-scroll" id="dayHourlyScroll"></div>
+      </div>
+    </section>
+
+    <!-- RAIN CHART -->
+    <section class="card rain-card">
+      <h3 class="card-title"><i class="fas fa-chart-bar"></i> Hourly Rain Probability</h3>
+      <div class="rain-chart-wrap"><canvas id="rainChart"></canvas></div>
+    </section>
+
+    <!-- MAP -->
+    <section class="card map-card">
+      <div class="map-header">
+        <h3 class="card-title"><i class="fas fa-map"></i> Weather Map</h3>
+        <div class="map-layer-tabs">
+          <button class="map-tab active" data-layer="temp_new">🌡️ Temp</button>
+          <button class="map-tab" data-layer="precipitation_new">🌧️ Rain</button>
+          <button class="map-tab" data-layer="clouds_new">☁️ Clouds</button>
+          <button class="map-tab" data-layer="wind_new">💨 Wind</button>
+        </div>
+      </div>
+      <div id="weatherMap"></div>
+    </section>
+
+    <!-- AQI -->
+    <section class="card aqi-card">
+      <h3 class="card-title"><i class="fas fa-lungs"></i> Air Quality</h3>
+      <div class="aqi-body">
+        <div class="aqi-score-wrap">
+          <div class="aqi-ring">
+            <svg viewBox="0 0 80 80">
+              <circle cx="40" cy="40" r="32" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="8"/>
+              <circle cx="40" cy="40" r="32" fill="none" stroke="url(#aqiGrad)" stroke-width="8" stroke-linecap="round" stroke-dasharray="201" id="aqiCircle" stroke-dashoffset="201" transform="rotate(-90 40 40)"/>
+              <defs>
+                <linearGradient id="aqiGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stop-color="#43e97b"/>
+                  <stop offset="100%" stop-color="#38f9d7"/>
+                </linearGradient>
+              </defs>
+            </svg>
+            <span class="aqi-num" id="aqiNum">--</span>
+          </div>
+          <span class="aqi-label" id="aqiLabel">--</span>
+        </div>
+        <div class="aqi-pollutants" id="aqiPollutants"></div>
+      </div>
+    </section>
+
+    <!-- HISTORY -->
+    <section class="card history-card">
+      <h3 class="card-title"><i class="fas fa-history"></i> Recent Searches</h3>
+      <div class="history-chips" id="historyChips"></div>
+    </section>
+
+  </main>
+
+  <!-- STAT DETAIL MODAL -->
+  <div class="modal-overlay hidden" id="statModal">
+    <div class="modal-box">
+      <button class="modal-close" id="statModalClose"><i class="fas fa-xmark"></i></button>
+      <div class="modal-icon" id="statModalIcon"></div>
+      <h3 class="modal-title" id="statModalTitle"></h3>
+      <div class="modal-value" id="statModalValue"></div>
+      <p class="modal-desc" id="statModalDesc"></p>
+      <div class="modal-context" id="statModalContext"></div>
+    </div>
+  </div>
+
+  <!-- LOADER -->
+  <div class="loader-overlay" id="loaderOverlay">
+    <div class="loader-inner">
+      <div class="loader-ring"></div>
+      <span>Fetching weather...</span>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div class="toast" id="toast"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
