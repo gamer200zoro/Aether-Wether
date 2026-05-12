@@ -2,10 +2,10 @@ const CACHE_NAME = "aether-v1";
 
 // core shell
 const STATIC_ASSETS = [
-  "/Aether-wether/",
-  "/Aether-wether/index.html",
-  "/Aether-wether/style.css",
-  "/Aether-wether/app.js"
+  "/",
+  "/index.html",
+  "/style.css",
+  "/app.js"
 ];
 
 // install

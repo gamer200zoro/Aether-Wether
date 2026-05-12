@@ -1019,19 +1019,49 @@ body.weather-mist   { --bg-primary: #0d1016; }
   .stats-card { grid-template-columns: repeat(3, 1fr); }
 }
 @media (max-width: 700px) {
-  .topbar { flex-wrap: wrap; padding: 10px 16px; gap: 10px; }
+  .topbar { flex-wrap: wrap; padding: 10px 16px; gap: 8px; }
   .search-wrap { order: 3; max-width: 100%; flex: 1 1 100%; }
+  .logo { font-size: 1.2rem; }
+  .unit-toggle { padding: 6px 10px; font-size: 0.78rem; }
+
+  .city-tabs-wrap {
+    top: 108px;
+    padding: 6px 8px 6px 12px;
+    position: fixed;
+  }
+  .city-tabs { flex-wrap: nowrap; }
+  .add-city-btn {
+    flex-shrink: 0;
+    margin-left: auto;
+    position: sticky;
+    right: 0;
+    background: rgba(10,14,26,0.92);
+    backdrop-filter: blur(10px);
+    padding: 5px 10px;
+    font-size: 0.78rem;
+  }
+  [data-theme="light"] .add-city-btn { background: rgba(232,240,254,0.95); }
+
   .main-grid {
     grid-template-columns: 1fr;
-    padding: 150px 14px 30px;
+    padding: 170px 12px 30px;
+    gap: 14px;
     grid-template-areas: "hero" "stats" "graph" "sun" "hourly" "weekly" "rain" "map" "aqi" "history";
   }
-  .stats-card { grid-template-columns: repeat(2, 1fr); }
+  .stats-card { grid-template-columns: repeat(2, 1fr); gap: 10px; }
   .big-temp { font-size: 4rem; }
   .big-icon { font-size: 5rem; }
-  .hero-card { flex-direction: column; gap: 16px; }
+  .hero-card { flex-direction: column; gap: 16px; align-items: flex-start; }
+  .hero-right { align-self: center; }
   .aqi-body { flex-direction: column; }
   .aqi-pollutants { grid-template-columns: repeat(2, 1fr); }
   .hdp-inner { grid-template-columns: repeat(2, 1fr); }
-  .modal-box { padding: 24px; }
+  .modal-box { padding: 20px; margin: 16px; width: calc(100% - 32px); max-width: 100%; }
+  .graph-tabs { gap: 4px; }
+  .graph-tab { padding: 4px 9px; font-size: 0.72rem; }
+  .map-layer-tabs { gap: 4px; flex-wrap: wrap; }
+  .map-tab { padding: 4px 8px; font-size: 0.72rem; }
+  .card { padding: 18px 16px; }
+  .card-title { font-size: 0.92rem; margin-bottom: 14px; }
+  #weatherMap { height: 260px !important; }
 }

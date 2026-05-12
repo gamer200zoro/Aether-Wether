@@ -7,7 +7,7 @@ const BASE    = 'https://api.openweathermap.org';
 
 // ── State ─────────────────────────────────────────────
 let unit          = 'metric';
-let history       = JSON.parse(localStorage.getItem('wHistory') || '[]');
+let searchHistory = JSON.parse(localStorage.getItem('wHistory') || '[]');
 let pinnedCities  = JSON.parse(localStorage.getItem('wPinned')  || '[]');
 let currentCity   = '';
 let currentLat    = null;
@@ -18,6 +18,7 @@ let rainChart     = null;
 let trendChart    = null;
 let weatherMap    = null;
 let mapLayer      = null;
+let flashActive   = false;
 let activeMapLayer = 'temp_new';
 let activeTrendGraph = 'temp';
 let activeHourlyIdx  = null;
@@ -227,7 +228,7 @@ function animate() {
 function setWeatherAnimation(type) { currentWeatherType=type; buildParticles(); }
 
 function maybeFlash() {
-  if(currentWeatherType!=='storm'&&currentWeatherType!=='thunderstorm') return;
+  if(currentWeatherType!=='storm') { flashActive=false; return; }
   if(Math.random()<0.003) {
     const f=document.createElement('div');
     f.style.cssText='position:fixed;inset:0;background:rgba(200,200,255,0.18);z-index:5;pointer-events:none;animation:flashOut 0.25s ease forwards;';
@@ -272,7 +273,7 @@ async function fetchSugg(q) {
     suggestions.querySelectorAll('.suggestion-item').forEach(el => {
       el.addEventListener('click', () => {
         searchInput.value = el.dataset.name; hideSugg();
-        fetchWeatherByCoords(el.dataset.lat, el.dataset.lon, el.dataset.name);
+        fetchWeatherByCoords(parseFloat(el.dataset.lat), parseFloat(el.dataset.lon), el.dataset.name);
       });
     });
   } catch { hideSugg(); }
@@ -566,13 +567,18 @@ function updateTrendChart(fore, type) {
   drawTrendChart(labels,data,label,color,tc,yLabel);
 }
 
+function hexToRgba(hex, alpha) {
+  const r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 function drawTrendChart(labels,data,label,color,tc,yLabel) {
   const c=$('trendChart');
   if(trendChart) trendChart.destroy();
   trendChart=new Chart(c,{
     type:'line',
     data:{ labels, datasets:[{ label, data,
-      borderColor:color, backgroundColor:color.replace(')',',0.1)').replace('rgb','rgba'),
+      borderColor:color, backgroundColor:hexToRgba(color, 0.12),
       borderWidth:2.5, pointBackgroundColor:color, pointRadius:4, pointHoverRadius:6,
       tension:0.4, fill:true }]},
     options:{ responsive:true, maintainAspectRatio:false,
@@ -610,23 +616,30 @@ function updateAQI(aqiData) {
   ].map(p=>`<div class="pollutant-item"><span class="pollutant-name">${p.name}</span><span class="pollutant-val">${p.val??'--'}</span></div>`).join('');
 }
 
-// listen from service worker
-navigator.serviceWorker.addEventListener("message", e => {
+function renderWeather(data) {
+  if (!data || !data.main) return;
+  currentCity = data.name || currentCity;
+  currentData = data;
+  updateHero(data);
+  updateStats(data);
+  updateSun(data);
+  showToast('Showing cached weather data', 'warning');
+}
 
-  if (e.data.type === "SAVE_WEATHER") {
-    localStorage.setItem("lastWeather", JSON.stringify(e.data.payload));
-  }
-
-  if (e.data.type === "OFFLINE") {
-    document.getElementById("offlineBadge").style.display = "block";
-
-    const cached = localStorage.getItem("lastWeather");
-    if (cached) {
-      const data = JSON.parse(cached);
-      renderWeather(data); // your existing function
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener("message", e => {
+    if (e.data.type === "SAVE_WEATHER") {
+      localStorage.setItem("lastWeather", JSON.stringify(e.data.payload));
     }
-  }
-});
+    if (e.data.type === "OFFLINE") {
+      document.getElementById("offlineBadge").style.display = "block";
+      const cached = localStorage.getItem("lastWeather");
+      if (cached) {
+        try { renderWeather(JSON.parse(cached)); } catch(_) {}
+      }
+    }
+  });
+}
 
 // ── Background ────────────────────────────────────────
 const wClasses=['weather-clear','weather-clouds','weather-rain','weather-storm','weather-snow','weather-mist'];
@@ -640,12 +653,14 @@ function updateBg(main) {
   document.body.classList.remove(...wClasses);
   document.body.classList.add(`weather-${t}`);
   setWeatherAnimation(t);
-  if(t==='storm'||t==='thunderstorm') maybeFlash();
+  if(t==='storm' && !flashActive) { flashActive=true; maybeFlash(); }
 }
 
 // ══════════════════════════════════════════════════════
 // WEATHER MAP (Leaflet)
 // ══════════════════════════════════════════════════════
+let mapClickMarker = null;
+
 function initMap(lat, lon) {
   if(weatherMap) { weatherMap.remove(); weatherMap=null; }
   weatherMap = L.map('weatherMap', { zoomControl:true, attributionControl:false }).setView([lat,lon],7);
@@ -656,6 +671,28 @@ function initMap(lat, lon) {
   L.circleMarker([lat,lon],{
     radius:8, fillColor:'#4facfe', color:'#fff', weight:2, fillOpacity:0.9
   }).addTo(weatherMap).bindPopup(`<b>${currentCity}</b>`).openPopup();
+
+  weatherMap.on('click', async function(e) {
+    const { lat: clat, lng: clon } = e.latlng;
+    if(mapClickMarker) weatherMap.removeLayer(mapClickMarker);
+    mapClickMarker = L.circleMarker([clat, clon], {
+      radius:7, fillColor:'#f093fb', color:'#fff', weight:2, fillOpacity:0.9
+    }).addTo(weatherMap).bindPopup('Loading...').openPopup();
+    try {
+      const gr = await fetch(`${BASE}/geo/1.0/reverse?lat=${clat}&lon=${clon}&limit=1&appid=${API_KEY}`);
+      const gd = await gr.json();
+      const cityName = gd?.[0]?.name || `${clat.toFixed(2)}, ${clon.toFixed(2)}`;
+      mapClickMarker.setPopupContent(`<b>${cityName}</b><br><small>Click to load weather</small>`);
+      mapClickMarker.on('click', () => {
+        fetchWeatherByCoords(clat, clon, cityName);
+        searchInput.value = cityName;
+      });
+      fetchWeatherByCoords(clat, clon, cityName);
+      searchInput.value = cityName;
+    } catch(err) {
+      mapClickMarker.setPopupContent('Could not fetch location');
+    }
+  });
 }
 
 function setMapLayer(layer) {
@@ -792,7 +829,8 @@ function checkAlerts(cur, fore) {
   const alerts=[];
   const wid=cur.weather[0].id;
   if(wid>=200&&wid<300) alerts.push('⛈️ Thunderstorm currently — stay indoors!');
-  if(cur.wind.speed*3.6>60) alerts.push('💨 Strong winds detected ('+Math.round(cur.wind.speed*3.6)+' km/h)');
+  const alertWindKmh = unit==='metric' ? cur.wind.speed*3.6 : cur.wind.speed*1.609;
+  if(alertWindKmh>60) alerts.push('💨 Strong winds detected ('+Math.round(alertWindKmh)+' km/h)');
   if(cur.main.temp>40)  alerts.push('🌡️ Extreme heat warning: '+Math.round(cur.main.temp)+'°');
   if(cur.main.temp<-10) alerts.push('🥶 Extreme cold warning: '+Math.round(cur.main.temp)+'°');
   const nextRain=fore.list.slice(0,4).find(h=>(h.pop||0)>0.7);
@@ -853,15 +891,15 @@ function updatePinnedTabTemp(city, temp) {
 // HISTORY
 // ══════════════════════════════════════════════════════
 function addHistory(city) {
-  history=[city,...history.filter(c=>c!==city)].slice(0,8);
-  localStorage.setItem('wHistory',JSON.stringify(history));
+  searchHistory=[city,...searchHistory.filter(c=>c!==city)].slice(0,8);
+  localStorage.setItem('wHistory',JSON.stringify(searchHistory));
   renderHistory();
 }
 
 function renderHistory() {
   const el=$('historyChips');
-  el.innerHTML=history.length
-    ? history.map(c=>`<div class="history-chip" data-city="${c}">
+  el.innerHTML=searchHistory.length
+    ? searchHistory.map(c=>`<div class="history-chip" data-city="${c}">
         <i class="fas fa-city"></i><span>${c}</span>
         <i class="fas fa-xmark chip-remove" data-rm="${c}"></i>
       </div>`).join('')
@@ -870,8 +908,8 @@ function renderHistory() {
     chip.addEventListener('click',e=>{
       if(e.target.classList.contains('chip-remove')) {
         e.stopPropagation();
-        history=history.filter(c=>c!==chip.dataset.city);
-        localStorage.setItem('wHistory',JSON.stringify(history));
+        searchHistory=searchHistory.filter(c=>c!==chip.dataset.city);
+        localStorage.setItem('wHistory',JSON.stringify(searchHistory));
         renderHistory(); return;
       }
       fetchWeather(chip.dataset.city);
@@ -975,6 +1013,6 @@ function showToast(msg,type='') {
 // ══════════════════════════════════════════════════════
 renderHistory();
 renderCityTabs();
-const startCity = history[0]||'New Delhi';
+const startCity = searchHistory[0]||'New Delhi';
 fetchWeather(startCity);
-if(history.length) searchInput.value=startCity;
+if(searchHistory.length) searchInput.value=startCity;
